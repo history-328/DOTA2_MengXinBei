@@ -3,17 +3,41 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trophy, Users, Swords } from "lucide-react";
+import { Download, Upload, Trophy, Users, Swords, Lock, Key } from "lucide-react";
 import TeamsManager from './components/TeamsManager';
 import PreSeason from './components/PreSeason';
 import NovaCup from './components/NovaCup';
 import SuperNovaCup from './components/SuperNovaCup';
 import * as React from 'react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { Input } from "@/components/ui/input";
+import { isValidTournamentData } from './types';
 
 function Dashboard() {
   const { isEditMode, setIsEditMode, data, setData } = useTournament();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const handleEditModeToggle = (checked: boolean) => {
+    if (checked) {
+      setShowPasswordModal(true);
+      setPassword("");
+      setPasswordError("");
+    } else {
+      setIsEditMode(false);
+    }
+  };
+
+  const handlePasswordSubmit = () => {
+    if (password === "8888") {
+      setIsEditMode(true);
+      setShowPasswordModal(false);
+    } else {
+      setPasswordError("密码错误");
+    }
+  };
 
   const handleExport = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
@@ -32,9 +56,19 @@ function Dashboard() {
       reader.onload = (e) => {
         try {
           const importedData = JSON.parse(e.target?.result as string);
-          setData(importedData);
+          if (isValidTournamentData(importedData)) {
+            setData(importedData);
+            alert('数据导入成功！');
+          } else {
+            alert('文件格式错误！请导入由本系统导出的有效比赛数据格式。');
+          }
         } catch (error) {
-          alert('Failed to parse JSON file');
+          alert('解析 JSON 文件失败');
+        } finally {
+          // Reset file input so the same file could be selected again
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
         }
       };
       reader.readAsText(file);
@@ -57,7 +91,7 @@ function Dashboard() {
               <Switch 
                 id="edit-mode" 
                 checked={isEditMode}
-                onCheckedChange={setIsEditMode}
+                onCheckedChange={handleEditModeToggle}
                 className="data-[state=checked]:bg-primary scale-90"
               />
               <Label htmlFor="edit-mode" className={`text-xs font-bold cursor-pointer transition-colors ${isEditMode ? 'text-primary' : 'text-muted-foreground'}`}>
@@ -87,6 +121,45 @@ function Dashboard() {
           </div>
         </div>
       </header>
+
+      {/* Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-card border border-border/60 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-primary/20 p-2 rounded-full border border-primary/30">
+                <Lock className="w-5 h-5 text-primary" />
+              </div>
+              <h3 className="text-lg font-bold text-white">进入编辑模式</h3>
+            </div>
+            <div className="space-y-4 mb-6">
+              <div className="flex items-center space-x-2 bg-background/50 rounded-md border border-border/50 px-3 overflow-hidden focus-within:border-primary transition-colors">
+                <Key className="w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="password"
+                  placeholder="请输入密码"
+                  className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-1 placeholder:text-muted-foreground/50"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                  autoFocus
+                />
+              </div>
+              {passwordError && (
+                <p className="text-destructive text-sm font-medium animate-in slide-in-from-top-1">{passwordError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowPasswordModal(false)} className="bg-transparent border-border/60 hover:bg-muted text-muted-foreground transition-all">
+                取消
+              </Button>
+              <Button onClick={handlePasswordSubmit} className="bg-primary hover:bg-primary/90 text-white shadow-md transition-all">
+                确认
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 container mx-auto px-4 py-8">
         <Tabs defaultValue="preseason" className="w-full">

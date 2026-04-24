@@ -47,6 +47,15 @@ export type TournamentData = {
   };
 };
 
+export function isValidTournamentData(data: any): data is TournamentData {
+  if (!data || typeof data !== 'object') return false;
+  if (!Array.isArray(data.teams)) return false;
+  if (!data.preSeason || !Array.isArray(data.preSeason.rounds)) return false;
+  if (!data.novaCup || !Array.isArray(data.novaCup.swissRounds) || !Array.isArray(data.novaCup.bracket)) return false;
+  if (!data.superNovaCup || !Array.isArray(data.superNovaCup.bracket)) return false;
+  return true;
+}
+
 export const initialData: TournamentData = {
   teams: [],
   preSeason: { rounds: [] },

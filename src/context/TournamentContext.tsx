@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { TournamentData, initialData } from '../types';
+import { TournamentData, initialData, isValidTournamentData } from '../types';
 
 type TournamentContextType = {
   data: TournamentData;
@@ -16,7 +16,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const saved = localStorage.getItem('dota2-tournament-data');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (isValidTournamentData(parsed)) {
+          return parsed;
+        } else {
+          console.error('Invalid data format in localStorage. Falling back to initial state.');
+        }
       } catch (e) {
         console.error('Failed to parse saved data', e);
       }

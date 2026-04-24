@@ -3,12 +3,13 @@ import { useTournament } from '../context/TournamentContext';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Match, Round } from '../types';
-import { Plus, Trophy, Swords, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Trophy, Swords, Trash2, AlertTriangle, Users } from 'lucide-react';
 
 export default function PreSeason() {
   const { data, setData, isEditMode } = useTournament();
   const [activeRound, setActiveRound] = useState<number>(0);
   const [roundToDelete, setRoundToDelete] = useState<string | null>(null);
+  const [standingsView, setStandingsView] = useState<'class' | 'team'>('class');
 
   const rounds = data.preSeason.rounds;
   const teams = data.teams.filter(t => !t.isSupernova);
@@ -183,6 +184,27 @@ export default function PreSeason() {
     return { ...team, wins, losses, points };
   }).sort((a, b) => b.points - a.points || b.wins - a.wins);
 
+  const classStandingsMap = new Map();
+  standings.forEach(team => {
+    if (!team.className) return;
+    if (!classStandingsMap.has(team.className)) {
+      classStandingsMap.set(team.className, {
+        className: team.className,
+        teamsCount: 0,
+        wins: 0,
+        losses: 0,
+        points: 0
+      });
+    }
+    const cs = classStandingsMap.get(team.className);
+    cs.teamsCount += 1;
+    cs.wins += team.wins;
+    cs.losses += team.losses;
+    cs.points += team.points;
+  });
+
+  const classStandings = Array.from(classStandingsMap.values()).sort((a, b) => b.points - a.points || b.wins - a.wins);
+
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
@@ -327,39 +349,92 @@ export default function PreSeason() {
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-[#cda34f]" />
-            <h3 className="font-bold text-lg text-white drop-shadow-md">积分榜</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-[#cda34f]" />
+              <h3 className="font-bold text-lg text-white drop-shadow-md">积分榜</h3>
+            </div>
+            <div className="flex bg-background/50 border border-border/50 rounded-lg p-1">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setStandingsView('class')} 
+                className={`h-7 px-3 text-xs font-semibold rounded-md ${standingsView === 'class' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-white'}`}
+              >
+                班级
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setStandingsView('team')} 
+                className={`h-7 px-3 text-xs font-semibold rounded-md ${standingsView === 'team' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-white'}`}
+              >
+                队伍
+              </Button>
+            </div>
           </div>
           <div className="border border-border/60 rounded-md bg-card/50 backdrop-blur-sm shadow-xl overflow-hidden">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead className="w-12 text-center font-bold text-muted-foreground">排名</TableHead>
-                  <TableHead className="font-bold text-muted-foreground">队伍</TableHead>
-                  <TableHead className="text-center font-bold text-muted-foreground">胜-负</TableHead>
-                  <TableHead className="text-right font-bold text-muted-foreground">积分</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {standings.map((team, idx) => (
-                  <TableRow key={team.id} className="border-border/50 hover:bg-muted/30 transition-colors">
-                    <TableCell className="text-center font-bold text-muted-foreground">{idx + 1}</TableCell>
-                    <TableCell>
-                      <div className="font-bold text-white">{team.name}</div>
-                      <div className="text-xs text-muted-foreground">{team.className}</div>
-                    </TableCell>
-                    <TableCell className="text-center font-mono">{team.wins}-{team.losses}</TableCell>
-                    <TableCell className="text-right font-bold text-primary text-lg">{team.points}</TableCell>
+            {standingsView === 'team' ? (
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="hover:bg-transparent border-border/50">
+                    <TableHead className="w-12 text-center font-bold text-muted-foreground">排名</TableHead>
+                    <TableHead className="font-bold text-muted-foreground">队伍</TableHead>
+                    <TableHead className="text-center font-bold text-muted-foreground">胜-负</TableHead>
+                    <TableHead className="text-right font-bold text-muted-foreground">积分</TableHead>
                   </TableRow>
-                ))}
-                {standings.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">暂无数据</TableCell>
+                </TableHeader>
+                <TableBody>
+                  {standings.map((team, idx) => (
+                    <TableRow key={team.id} className="border-border/50 hover:bg-muted/30 transition-colors">
+                      <TableCell className="text-center font-bold text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell>
+                        <div className="font-bold text-white">{team.name}</div>
+                        <div className="text-xs text-muted-foreground">{team.className}</div>
+                      </TableCell>
+                      <TableCell className="text-center font-mono">{team.wins}-{team.losses}</TableCell>
+                      <TableCell className="text-right font-bold text-primary text-lg">{team.points}</TableCell>
+                    </TableRow>
+                  ))}
+                  {standings.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">暂无数据</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            ) : (
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="hover:bg-transparent border-border/50">
+                    <TableHead className="w-12 text-center font-bold text-muted-foreground">排名</TableHead>
+                    <TableHead className="font-bold text-muted-foreground">班级</TableHead>
+                    <TableHead className="text-center font-bold text-muted-foreground">胜-负</TableHead>
+                    <TableHead className="text-right font-bold text-muted-foreground">总分</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {classStandings.map((cls, idx) => (
+                    <TableRow key={cls.className} className="border-border/50 hover:bg-muted/30 transition-colors">
+                      <TableCell className="text-center font-bold text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell>
+                        <div className="font-bold text-white">{cls.className}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Users className="w-3 h-3" /> {cls.teamsCount} 支队伍
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center font-mono">{cls.wins}-{cls.losses}</TableCell>
+                      <TableCell className="text-right font-bold text-primary text-lg">{cls.points}</TableCell>
+                    </TableRow>
+                  ))}
+                  {classStandings.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">暂无数据</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </div>
         </div>
       </div>
