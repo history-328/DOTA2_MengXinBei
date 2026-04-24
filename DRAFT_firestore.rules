@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Since this is a public dashboard without auth, we'll allow anyone to read. 
+    // And since it's a simple dashboard without actual authentication besides the frontend password,
+    // we'll allow updates to everyone, but we'll schema-check the update.
+    
+    function isValidTournament(data) {
+      return data.keys().hasAll(['teams', 'preSeason', 'novaCup', 'superNovaCup'])
+        // Allow any values since it's a custom structure, but require these minimal keys
+        // We will do more strict validation if needed, but for now we'll allow
+        && data.teams is list
+        && data.preSeason is map
+        && data.novaCup is map
+        && data.superNovaCup is map;
+    }
+
+    match /tournaments/{tournamentId} {
+      allow get: if true;
+      allow list: if true; // Technically has no `userId` attribute, anyone can view
+      
+      // Allow creation
+      allow create: if isValidTournament(request.resource.data);
+      
+      // Allow update
+      allow update: if isValidTournament(request.resource.data);
+    }
+  }
+}
