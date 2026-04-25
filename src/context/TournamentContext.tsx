@@ -25,7 +25,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     const loadData = async () => {
       try {
-        const res = await fetch('/api/tournament');
+        const res = await fetch('/api/data');
         if (res.ok) {
           const fetchedData = await res.json();
           if (isValidTournamentData(fetchedData)) {
@@ -53,7 +53,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const saveToServer = async () => {
     try {
-      const res = await fetch('/api/tournament', {
+      const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataRef.current)

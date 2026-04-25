@@ -16,14 +16,15 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '50mb' }));
 
-app.get('/api/tournament', async (req, res) => {
+app.get('/api/data', async (req, res) => {
   try {
     const dataDocRef = doc(db, 'tournaments', 'data');
     const snapshot = await getDoc(dataDocRef);
     if (snapshot.exists()) {
       return res.json(snapshot.data());
     } else {
-      return res.status(404).json({ error: 'Data not found' });
+      // If none exists, just return empty data so frontend won't error out
+      return res.json({});
     }
   } catch (error) {
     console.error('Firebase error:', error);
@@ -31,7 +32,7 @@ app.get('/api/tournament', async (req, res) => {
   }
 });
 
-app.post('/api/tournament', async (req, res) => {
+app.post('/api/data', async (req, res) => {
   try {
     console.log('Received POST /api/tournament with body typeof:', typeof req.body, req.body ? Object.keys(req.body) : null);
     const dataDocRef = doc(db, 'tournaments', 'data');
