@@ -16,30 +16,46 @@ const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'fire
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 
+let inMemoryData: any = null;
+try {
+  if (fs.existsSync('fallback-db.json')) {
+    inMemoryData = JSON.parse(fs.readFileSync('fallback-db.json', 'utf-8'));
+  }
+} catch(e) {}
+
 // API Routes
 app.get('/api/data', async (req, res) => {
   try {
     const dataDocRef = doc(db, 'tournaments', 'data');
     const snapshot = await getDoc(dataDocRef);
     if (snapshot.exists()) {
-      return res.json(snapshot.data());
+      inMemoryData = snapshot.data();
+      fs.writeFileSync('fallback-db.json', JSON.stringify(inMemoryData));
+      return res.json(inMemoryData);
     } else {
-      return res.json({});
+      return res.json(inMemoryData || {});
     }
   } catch (e) {
     console.error('Error fetching data from Firebase:', e);
-    return res.status(500).json({ error: String(e) });
+    // Fallback to in-memory data
+    return res.json(inMemoryData || {});
   }
 });
 
 app.post('/api/data', async (req, res) => {
+  inMemoryData = req.body;
+  try {
+    fs.writeFileSync('fallback-db.json', JSON.stringify(inMemoryData));
+  } catch(e) {}
+  
   try {
     const dataDocRef = doc(db, 'tournaments', 'data');
     await setDoc(dataDocRef, req.body);
-    res.json({ success: true });
+    res.json({ success: true, usingFallback: false });
   } catch (e) {
-    console.error('Error saving data to Firebase:', e);
-    res.status(500).json({ error: String(e) });
+    console.error('Error saving data to Firebase (fallback to memory):', e);
+    // Still return success to the user so they can continue to use the app in memory!
+    res.json({ success: true, usingFallback: true, warning: String(e) });
   }
 });
 
