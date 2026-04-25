@@ -4,6 +4,11 @@ import fs from 'fs';
 import path from 'path';
 import { put } from '@vercel/blob';
 
+// Load environment variables for the server
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config();
+
 const app = express();
 const PORT = 3000;
 const VERCEL_BASE_URL = 'https://lmvlhwwjh7ptuh8u.public.blob.vercel-storage.com';
