@@ -53,7 +53,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         body: JSON.stringify(dataRef.current),
       });
       if (res.ok) {
-        alert("数据保存成功！当前访问此网页的其他人刷新都能看到。注意：由于服务器无持久化数据库，部署后或服务器休眠重启后数据将重置。");
+        alert("数据保存成功！现在所有人刷新网页都能看到最新的数据，且数据已永久保存。");
       } else {
         alert("保存失败");
       }
