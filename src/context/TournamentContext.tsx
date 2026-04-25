@@ -55,11 +55,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (res.ok) {
         alert("数据保存成功！现在所有人刷新网页都能看到最新的数据，且数据已永久保存。");
       } else {
-        alert("保存失败");
+        const errData = await res.json().catch(() => ({}));
+        alert(`保存失败: ${errData.error || res.statusText}`);
       }
     } catch (e) {
       console.error('Failed to save data:', e);
-      alert("保存失败");
+      alert(`保存失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 

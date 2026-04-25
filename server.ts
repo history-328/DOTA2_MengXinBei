@@ -56,7 +56,7 @@ app.post('/api/data', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error('Error saving data to Vercel string:', e);
-    res.status(500).json({ error: 'Failed to save data to Vercel' });
+    res.status(500).json({ error: `Vercel storage error: ${e instanceof Error ? e.message : String(e)}` });
   }
 });
 
