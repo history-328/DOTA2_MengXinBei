@@ -1,8 +1,8 @@
 {
   "entities": {
-    "Tournament": {
-      "title": "Tournament Data",
-      "description": "Stores the entire state of the DOTA 2 tournament",
+    "TournamentData": {
+      "title": "TournamentData",
+      "description": "The current state of the global tournament.",
       "type": "object",
       "properties": {
         "teams": { "type": "array" },
@@ -14,9 +14,9 @@
     }
   },
   "firestore": {
-    "/tournaments/{tournamentId}": {
-      "schema": { "$ref": "#/entities/Tournament" },
-      "description": "Store tournament data"
+    "/tournament/{docId}": {
+      "schema": "TournamentData",
+      "description": "Global tournament singleton document."
     }
   }
 }
