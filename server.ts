@@ -42,15 +42,20 @@ app.get('/api/data', async (req, res) => {
 app.post('/api/data', async (req, res) => {
   inMemoryData = req.body;
   try {
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    let token = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!token) {
       console.warn("BLOB_READ_WRITE_TOKEN is not set in environment variables. Data was not saved to Vercel.");
       return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN is missing' });
     }
+    
+    // Strip surrounding quotes in case the user accidentally included them
+    token = token.replace(/^["']|["']$/g, '');
 
     await put(JSON_FILENAME, JSON.stringify(inMemoryData, null, 2), {
       access: 'public',
       addRandomSuffix: false,
-      token: process.env.BLOB_READ_WRITE_TOKEN
+      allowOverwrite: true,
+      token: token
     });
 
     res.json({ success: true });
