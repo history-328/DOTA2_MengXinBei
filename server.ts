@@ -2,50 +2,75 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import path from 'path';
+import { put } from '@vercel/blob';
 
 // Load environment variables for the server
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './src/firebase';
-
 const app = express();
 const PORT = 3000;
+const VERCEL_BASE_URL = 'https://lmvlhwwjh7ptuh8u.public.blob.vercel-storage.com';
+const JSON_FILENAME = 'dota2-tournament-data.json';
+const OLD_FILENAME = 'dota2-tournament-data%20(10).json';
 
 app.use(express.json({ limit: '50mb' }));
 
+// Load initial data
+let inMemoryData: any = null;
+
+// API Routes
 app.get('/api/data', async (req, res) => {
   try {
-    const dataDocRef = doc(db, 'tournaments', 'data');
-    const snapshot = await getDoc(dataDocRef);
-    if (snapshot.exists()) {
-      return res.json(snapshot.data());
-    } else {
-      // If none exists, just return empty data so frontend won't error out
-      return res.json({});
+    // Try fetching the new custom named file first
+    let fetchRes = await fetch(`${VERCEL_BASE_URL}/${JSON_FILENAME}?t=${Date.now()}`);
+    if (!fetchRes.ok) {
+      // Fallback to the one the user manually uploaded 
+      fetchRes = await fetch(`${VERCEL_BASE_URL}/${OLD_FILENAME}?t=${Date.now()}`);
     }
-  } catch (error) {
-    console.error('Firebase error:', error);
-    return res.status(500).json({ error: 'Failed to fetch' });
+
+    if (fetchRes.ok) {
+      const data = await fetchRes.json();
+      inMemoryData = data;
+      return res.json(data);
+    } else {
+      // Use fallback if blob fetch fails
+      return res.json(inMemoryData || {});
+    }
+  } catch (e) {
+    console.error('Error fetching data from Vercel Blob:', e);
+    return res.json(inMemoryData || {});
   }
 });
 
 app.post('/api/data', async (req, res) => {
+  inMemoryData = req.body;
   try {
-    console.log('Received POST /api/tournament with body typeof:', typeof req.body, req.body ? Object.keys(req.body) : null);
-    const dataDocRef = doc(db, 'tournaments', 'data');
-    await setDoc(dataDocRef, req.body);
+    let token = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!token) {
+      console.warn("BLOB_READ_WRITE_TOKEN is not set in environment variables. Data was not saved to Vercel.");
+      return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN is missing' });
+    }
+    
+    // Strip surrounding quotes in case the user accidentally included them
+    token = token.replace(/^["']|["']$/g, '');
+
+    await put(JSON_FILENAME, JSON.stringify(inMemoryData, null, 2), {
+      access: 'public',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      token: token
+    });
+
     res.json({ success: true });
-  } catch (error) {
-    console.error('Firebase error:', error);
-    res.status(500).json({ error: `Saving to Firebase error: ${error instanceof Error ? error.message : String(error)}` });
+  } catch (e) {
+    console.error('Error saving data to Vercel string:', e);
+    res.status(500).json({ error: `Vercel storage error: ${e instanceof Error ? e.message : String(e)}` });
   }
 });
 
 async function startServer() {
-
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

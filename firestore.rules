@@ -18,8 +18,9 @@ service cloud.firestore {
     match /tournaments/{tournamentId} {
       allow get: if true;
       allow list: if true;
-      allow create: if true;
-      allow update: if true;
+      
+      allow create: if isValidTournament(request.resource.data);
+      allow update: if isValidTournament(request.resource.data);
     }
   }
 }
