@@ -1,7 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { TournamentData, initialData, isValidTournamentData } from '../types';
-import { db } from '../firebase';
-import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 
 type TournamentContextType = {
   data: TournamentData;
@@ -17,54 +15,60 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [data, setDataState] = useState<TournamentData>(initialData);
   const [isEditMode, setIsEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Use a ref to track the latest data so we don't overwrite local changes while saving
+  const dataRef = useRef<TournamentData>(initialData);
 
-  // Read initial data from Firestore
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'tournaments', 'main'), (docSnap) => {
-      if (docSnap.exists()) {
-        const firestoreData = docSnap.data() as any;
-        if (isValidTournamentData(firestoreData)) {
-          setDataState(firestoreData);
-        } else {
-          console.error("Invalid data in Firestore");
-        }
-      } else {
-        // Do local storage fallback or just use initialData if not exist
-        const saved = localStorage.getItem('dota2-tournament-data');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (isValidTournamentData(parsed)) {
-              setDataState(parsed);
-              // Migrate to Firestore
-              setDoc(doc(db, 'tournaments', 'main'), parsed).catch(e => console.error("Migration error:", e));
-            }
-          } catch (e) {
-            console.error('Failed to parse saved data', e);
+  const loadData = async () => {
+    try {
+      const res = await fetch('/api/data');
+      if (res.ok) {
+        const fetchedData = await res.json();
+        // If the server data is valid and not empty
+        if (fetchedData && typeof fetchedData === 'object' && Object.keys(fetchedData).length > 0) {
+          if (isValidTournamentData(fetchedData)) {
+             // Only update if it's different to prevent unnecessary re-renders
+             if (JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
+                setDataState(fetchedData);
+                dataRef.current = fetchedData;
+             }
           }
-        } else {
-          // Initialize empty tournament
-          setDoc(doc(db, 'tournaments', 'main'), initialData).catch(e => console.error("Init error:", e));
         }
       }
-      setLoading(false);
-    }, (error) => {
-      console.error('Firestore subscription error:', error);
-      setLoading(false);
-    });
+    } catch (e) {
+      console.error('Failed to load data:', e);
+    } finally {
+      if (loading) setLoading(false);
+    }
+  };
 
-    return () => unsub();
-  }, []);
+  useEffect(() => {
+    loadData();
+    // Poll for updates every 3 seconds
+    const interval = setInterval(() => {
+      // Don't poll if we're in edit mode to avoid overwriting ongoing edits
+      if (!isEditMode) {
+        loadData();
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isEditMode, loading]);
 
   const setData: React.Dispatch<React.SetStateAction<TournamentData>> = (value) => {
-    // We update local state optimistically, but mainly write to firestore
     setDataState((prev) => {
       const nextData = typeof value === 'function' ? value(prev) : value;
-      // Write to firestore asynchronously
-      setDoc(doc(db, 'tournaments', 'main'), nextData).catch((error) => {
-         console.error('Firestore Write Error:', error);
-      });
-      return nextData; // Return nextData to update local state optimistically
+      dataRef.current = nextData;
+      
+      // Save to server asynchronously
+      fetch('/api/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(nextData),
+      }).catch(err => console.error('Failed to save data:', err));
+      
+      return nextData;
     });
   };
 
