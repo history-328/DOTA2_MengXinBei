@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { TournamentData, initialData, isValidTournamentData } from '../types';
-import { db, signInAnonymously } from '../tcb';
+
+const GET_DATA_URL = 'https://uks2fscaig.sealosbja.site/getData';
+const SAVE_DATA_URL = 'https://uks2fscaig.sealosbja.site/saveData';
 
 type TournamentContextType = {
   data: TournamentData;
@@ -33,76 +35,74 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const dataRef = useRef<TournamentData>(data);
 
   useEffect(() => {
-    let watcher: any = null;
+    let intervalId: any;
 
-    const initDb = async () => {
-      // Timeout to stop loading and use local data if TCB is blocked or slow
+    const fetchRemoteData = async () => {
+      try {
+        const response = await fetch(GET_DATA_URL);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const fetchedData = await response.json();
+        
+        // Assume API returns data wrapped in an object or just the data directly.
+        // We will pass it to our validator.
+        if (isValidTournamentData(fetchedData)) {
+          if (!isEditMode && JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
+            setDataState(fetchedData as TournamentData);
+            dataRef.current = fetchedData as TournamentData;
+            localStorage.setItem('tournamentData', JSON.stringify(fetchedData));
+          }
+        } else if (fetchedData.data && isValidTournamentData(fetchedData.data)) {
+           // Handle if the API wraps it in { data: ... }
+           if (!isEditMode && JSON.stringify(fetchedData.data) !== JSON.stringify(dataRef.current)) {
+            setDataState(fetchedData.data as TournamentData);
+            dataRef.current = fetchedData.data as TournamentData;
+            localStorage.setItem('tournamentData', JSON.stringify(fetchedData.data));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch remote data:", err);
+      }
+    };
+
+    const initDataProcess = async () => {
+      // Timeout to stop loading and use local data if network is slow
       const loadingTimeout = setTimeout(() => {
         if (loading) {
-          console.warn("TCB connection timeout or blocked. Falling back to local data.");
+          console.warn("Network connection timeout. Falling back to local data.");
           setLoading(false);
         }
       }, 5000); // 5 seconds timeout
 
-      try {
-        await signInAnonymously();
+      await fetchRemoteData();
+      
+      clearTimeout(loadingTimeout);
+      if (loading) setLoading(false);
 
-        // 1. Fetch initial data
-        const res = await db.collection('mengxinbei').doc('tournament_data').get();
-        if (res.data && res.data.length > 0) {
-          const fetchedData = res.data[0];
-          delete fetchedData._id;
-          if (isValidTournamentData(fetchedData)) {
-            if (!isEditMode && JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
-              setDataState(fetchedData as TournamentData);
-              dataRef.current = fetchedData as TournamentData;
-              localStorage.setItem('tournamentData', JSON.stringify(fetchedData));
-            }
-          }
-        }
-        
-        clearTimeout(loadingTimeout);
-        if (loading) setLoading(false);
-
-        // 2. Watch for changes
-        watcher = db.collection('mengxinbei').where({ _id: 'tournament_data' }).watch({
-          onChange: function(snapshot: any) {
-            if (snapshot.docs && snapshot.docs.length > 0) {
-              const fetchedData = snapshot.docs[0];
-              delete fetchedData._id;
-              if (isValidTournamentData(fetchedData)) {
-                if (!isEditMode && JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
-                  setDataState(fetchedData as TournamentData);
-                  dataRef.current = fetchedData as TournamentData;
-                  localStorage.setItem('tournamentData', JSON.stringify(fetchedData));
-                }
-              }
-            }
-          },
-          onError: function(err: any) {
-            console.error("TCB watch error", err);
-          }
-        });
-
-      } catch (err) {
-        console.error("TCB init fail:", err);
-        clearTimeout(loadingTimeout);
-        if (loading) setLoading(false);
-      }
+      // Poll every 10 seconds for real-time-ish updates
+      intervalId = setInterval(fetchRemoteData, 10000);
     };
 
-    initDb();
+    initDataProcess();
 
     return () => {
-      if (watcher) watcher.close();
+      if (intervalId) clearInterval(intervalId);
     };
   }, [isEditMode]);
 
   const saveToServer = async () => {
     try {
-      // TCB uses set/update. We can just try to set which will replace or create the doc
-      const res = await db.collection('mengxinbei').doc('tournament_data').set(dataRef.current);
-      console.log('TCB save result:', res);
+      const response = await fetch(SAVE_DATA_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataRef.current)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to save! Status: ${response.status}`);
+      }
       
       localStorage.setItem('tournamentData', JSON.stringify(dataRef.current));
       alert("数据保存成功！现在所有人刷新网页都能看到最新的数据，且数据已永久保存。");
