@@ -1,34 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { TournamentData, initialData, isValidTournamentData } from '../types';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: any;
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {},
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
 
 type TournamentContextType = {
   data: TournamentData;
@@ -87,7 +58,10 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataRef.current)
       });
-      if (!res.ok) throw new Error('Save failed');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Save failed with status ${res.status}`);
+      }
       alert("数据保存成功！现在所有人刷新网页都能看到最新的数据，且数据已永久保存。");
     } catch (e) {
       console.error('Failed to save data:', e);

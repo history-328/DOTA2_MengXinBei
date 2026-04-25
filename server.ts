@@ -33,6 +33,7 @@ app.get('/api/tournament', async (req, res) => {
 
 app.post('/api/tournament', async (req, res) => {
   try {
+    console.log('Received POST /api/tournament with body typeof:', typeof req.body, req.body ? Object.keys(req.body) : null);
     const dataDocRef = doc(db, 'tournaments', 'data');
     await setDoc(dataDocRef, req.body);
     res.json({ success: true });
