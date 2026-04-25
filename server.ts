@@ -2,42 +2,44 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import path from 'path';
+import { put } from '@vercel/blob';
+
+// Load environment variables for the server
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 
 const app = express();
 const PORT = 3000;
+const VERCEL_BASE_URL = 'https://lmvlhwwjh7ptuh8u.public.blob.vercel-storage.com';
+const JSON_FILENAME = 'dota2-tournament-data.json';
+const OLD_FILENAME = 'dota2-tournament-data%20(10).json';
 
 app.use(express.json({ limit: '50mb' }));
 
-// Initialize Firebase for backend access
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf-8'));
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
-
+// Load initial data
 let inMemoryData: any = null;
-try {
-  if (fs.existsSync('fallback-db.json')) {
-    inMemoryData = JSON.parse(fs.readFileSync('fallback-db.json', 'utf-8'));
-  }
-} catch(e) {}
 
 // API Routes
 app.get('/api/data', async (req, res) => {
   try {
-    const dataDocRef = doc(db, 'tournaments', 'data');
-    const snapshot = await getDoc(dataDocRef);
-    if (snapshot.exists()) {
-      inMemoryData = snapshot.data();
-      fs.writeFileSync('fallback-db.json', JSON.stringify(inMemoryData));
-      return res.json(inMemoryData);
+    // Try fetching the new custom named file first
+    let fetchRes = await fetch(`${VERCEL_BASE_URL}/${JSON_FILENAME}?t=${Date.now()}`);
+    if (!fetchRes.ok) {
+      // Fallback to the one the user manually uploaded 
+      fetchRes = await fetch(`${VERCEL_BASE_URL}/${OLD_FILENAME}?t=${Date.now()}`);
+    }
+
+    if (fetchRes.ok) {
+      const data = await fetchRes.json();
+      inMemoryData = data;
+      return res.json(data);
     } else {
+      // Use fallback if blob fetch fails
       return res.json(inMemoryData || {});
     }
   } catch (e) {
-    console.error('Error fetching data from Firebase:', e);
-    // Fallback to in-memory data
+    console.error('Error fetching data from Vercel Blob:', e);
     return res.json(inMemoryData || {});
   }
 });
@@ -45,17 +47,26 @@ app.get('/api/data', async (req, res) => {
 app.post('/api/data', async (req, res) => {
   inMemoryData = req.body;
   try {
-    fs.writeFileSync('fallback-db.json', JSON.stringify(inMemoryData));
-  } catch(e) {}
-  
-  try {
-    const dataDocRef = doc(db, 'tournaments', 'data');
-    await setDoc(dataDocRef, req.body);
-    res.json({ success: true, usingFallback: false });
+    let token = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!token) {
+      console.warn("BLOB_READ_WRITE_TOKEN is not set in environment variables. Data was not saved to Vercel.");
+      return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN is missing' });
+    }
+    
+    // Strip surrounding quotes in case the user accidentally included them
+    token = token.replace(/^["']|["']$/g, '');
+
+    await put(JSON_FILENAME, JSON.stringify(inMemoryData, null, 2), {
+      access: 'public',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      token: token
+    });
+
+    res.json({ success: true });
   } catch (e) {
-    console.error('Error saving data to Firebase (fallback to memory):', e);
-    // Still return success to the user so they can continue to use the app in memory!
-    res.json({ success: true, usingFallback: true, warning: String(e) });
+    console.error('Error saving data to Vercel string:', e);
+    res.status(500).json({ error: `Vercel storage error: ${e instanceof Error ? e.message : String(e)}` });
   }
 });
 
