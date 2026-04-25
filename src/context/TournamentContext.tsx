@@ -1,34 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { TournamentData, initialData, isValidTournamentData } from '../types';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: any;
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {},
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+import { db, signInAnonymously } from '../tcb';
 
 type TournamentContextType = {
   data: TournamentData;
@@ -61,57 +33,82 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const dataRef = useRef<TournamentData>(data);
 
   useEffect(() => {
-    // Timeout to stop loading and use local data if Firebase is blocked or slow
-    const loadingTimeout = setTimeout(() => {
-      if (loading) {
-        console.warn("Firebase connection timeout or blocked. Falling back to local data.");
-        setLoading(false);
-      }
-    }, 5000); // 5 seconds timeout
+    let watcher: any = null;
 
-    const dataDocRef = doc(db, 'tournaments', 'data');
-    
-    // Test connection first
-    getDoc(dataDocRef).catch((error) => {
-      if(error instanceof Error && error.message.includes('the client is offline')) {
-        console.error("Please check your Firebase configuration.");
-      }
-    });
+    const initDb = async () => {
+      // Timeout to stop loading and use local data if TCB is blocked or slow
+      const loadingTimeout = setTimeout(() => {
+        if (loading) {
+          console.warn("TCB connection timeout or blocked. Falling back to local data.");
+          setLoading(false);
+        }
+      }, 5000); // 5 seconds timeout
 
-    const unsubscribe = onSnapshot(dataDocRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const fetchedData = snapshot.data();
-        if (isValidTournamentData(fetchedData)) {
-          if (!isEditMode && JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
-            setDataState(fetchedData as TournamentData);
-            dataRef.current = fetchedData as TournamentData;
-            localStorage.setItem('tournamentData', JSON.stringify(fetchedData));
+      try {
+        await signInAnonymously();
+
+        // 1. Fetch initial data
+        const res = await db.collection('mengxinbei').doc('tournament_data').get();
+        if (res.data && res.data.length > 0) {
+          const fetchedData = res.data[0];
+          delete fetchedData._id;
+          if (isValidTournamentData(fetchedData)) {
+            if (!isEditMode && JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
+              setDataState(fetchedData as TournamentData);
+              dataRef.current = fetchedData as TournamentData;
+              localStorage.setItem('tournamentData', JSON.stringify(fetchedData));
+            }
           }
         }
+        
+        clearTimeout(loadingTimeout);
+        if (loading) setLoading(false);
+
+        // 2. Watch for changes
+        watcher = db.collection('mengxinbei').where({ _id: 'tournament_data' }).watch({
+          onChange: function(snapshot: any) {
+            if (snapshot.docs && snapshot.docs.length > 0) {
+              const fetchedData = snapshot.docs[0];
+              delete fetchedData._id;
+              if (isValidTournamentData(fetchedData)) {
+                if (!isEditMode && JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
+                  setDataState(fetchedData as TournamentData);
+                  dataRef.current = fetchedData as TournamentData;
+                  localStorage.setItem('tournamentData', JSON.stringify(fetchedData));
+                }
+              }
+            }
+          },
+          onError: function(err: any) {
+            console.error("TCB watch error", err);
+          }
+        });
+
+      } catch (err) {
+        console.error("TCB init fail:", err);
+        clearTimeout(loadingTimeout);
+        if (loading) setLoading(false);
       }
-      clearTimeout(loadingTimeout);
-      if (loading) setLoading(false);
-    }, (error) => {
-      console.error("Firebase sync error:", error);
-      clearTimeout(loadingTimeout);
-      if (loading) setLoading(false);
-    });
+    };
+
+    initDb();
 
     return () => {
-      clearTimeout(loadingTimeout);
-      unsubscribe();
+      if (watcher) watcher.close();
     };
   }, [isEditMode]);
 
   const saveToServer = async () => {
     try {
-      const dataDocRef = doc(db, 'tournaments', 'data');
-      await setDoc(dataDocRef, dataRef.current);
+      // TCB uses set/update. We can just try to set which will replace or create the doc
+      const res = await db.collection('mengxinbei').doc('tournament_data').set(dataRef.current);
+      console.log('TCB save result:', res);
+      
       localStorage.setItem('tournamentData', JSON.stringify(dataRef.current));
       alert("数据保存成功！现在所有人刷新网页都能看到最新的数据，且数据已永久保存。");
     } catch (e) {
       console.error('Failed to save data:', e);
-      alert(`保存失败（如果没开梯子可能无法同步到云端）: ${e instanceof Error ? e.message : String(e)}`);
+      alert(`保存失败: ${e instanceof Error ? e.message : String(e)}`);
       // Even if server fails, we save locally
       localStorage.setItem('tournamentData', JSON.stringify(dataRef.current));
     }
