@@ -7,6 +7,7 @@ type TournamentContextType = {
   isEditMode: boolean;
   setIsEditMode: React.Dispatch<React.SetStateAction<boolean>>;
   resetData: () => void;
+  saveToServer: () => Promise<void>;
 };
 
 const TournamentContext = createContext<TournamentContextType | undefined>(undefined);
@@ -42,6 +43,26 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  const saveToServer = async () => {
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataRef.current),
+      });
+      if (res.ok) {
+        alert("数据保存成功！当前访问此网页的其他人刷新都能看到。注意：由于服务器无持久化数据库，部署后或服务器休眠重启后数据将重置。");
+      } else {
+        alert("保存失败");
+      }
+    } catch (e) {
+      console.error('Failed to save data:', e);
+      alert("保存失败");
+    }
+  };
+
   useEffect(() => {
     loadData();
     // Poll for updates every 3 seconds
@@ -58,16 +79,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setDataState((prev) => {
       const nextData = typeof value === 'function' ? value(prev) : value;
       dataRef.current = nextData;
-      
-      // Save to server asynchronously
-      fetch('/api/data', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(nextData),
-      }).catch(err => console.error('Failed to save data:', err));
-      
       return nextData;
     });
   };
@@ -83,7 +94,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }
 
   return (
-    <TournamentContext.Provider value={{ data, setData, isEditMode, setIsEditMode, resetData }}>
+    <TournamentContext.Provider value={{ data, setData, isEditMode, setIsEditMode, resetData, saveToServer }}>
       {children}
     </TournamentContext.Provider>
   );

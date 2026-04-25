@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trophy, Users, Swords, Lock, Key } from "lucide-react";
+import { Download, Upload, Trophy, Users, Swords, Lock, Key, Save } from "lucide-react";
 import TeamsManager from './components/TeamsManager';
 import PreSeason from './components/PreSeason';
 import NovaCup from './components/NovaCup';
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { isValidTournamentData } from './types';
 
 function Dashboard() {
-  const { isEditMode, setIsEditMode, data, setData } = useTournament();
+  const { isEditMode, setIsEditMode, data, setData, saveToServer } = useTournament();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState("");
@@ -115,6 +115,10 @@ function Dashboard() {
                 <Button variant="outline" size="sm" onClick={handleExport} className="h-8 bg-background/50 border-border/60 hover:bg-background hover:text-white text-xs">
                   <Download className="w-3.5 h-3.5 mr-1.5" />
                   导出
+                </Button>
+                <Button size="sm" onClick={saveToServer} className="h-8 bg-primary hover:bg-primary/90 text-white font-bold text-xs ml-2 shadow-md">
+                  <Save className="w-3.5 h-3.5 mr-1.5" />
+                  发布/保存数据
                 </Button>
               </div>
             )}
