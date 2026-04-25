@@ -50,49 +50,48 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const dataRef = useRef<TournamentData>(initialData);
 
   useEffect(() => {
-    const dataDocRef = doc(db, 'tournaments', 'data');
+    let active = true;
     
-    // Test connection first
-    getDoc(dataDocRef).catch((error) => {
-      if(error instanceof Error && error.message.includes('the client is offline')) {
-        console.error("Please check your Firebase configuration.");
-      }
-    });
-
-    const unsubscribe = onSnapshot(dataDocRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const fetchedData = snapshot.data();
-        if (isValidTournamentData(fetchedData)) {
-          // If we are in edit mode, we probably don't want to wildly overwrite the user's ongoing changes,
-          // but for simplicity and since it's realtime, we overwrite if we're not currently making changes.
-          // In a real app we'd merge or use field-level changes.
-          if (!isEditMode && JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
-            setDataState(fetchedData as TournamentData);
-            dataRef.current = fetchedData as TournamentData;
+    const loadData = async () => {
+      try {
+        const res = await fetch('/api/tournament');
+        if (res.ok) {
+          const fetchedData = await res.json();
+          if (isValidTournamentData(fetchedData)) {
+            if (!isEditMode && JSON.stringify(fetchedData) !== JSON.stringify(dataRef.current)) {
+              setDataState(fetchedData as TournamentData);
+              dataRef.current = fetchedData as TournamentData;
+            }
           }
         }
+      } catch (error) {
+        console.error("Please check your network. Failed to fetch data.");
+      } finally {
+        if (loading && active) setLoading(false);
       }
-      if (loading) setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'tournaments/data');
-      if (loading) setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
-  }, [isEditMode]);
+    loadData();
+    const interval = setInterval(loadData, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [isEditMode, loading]);
 
   const saveToServer = async () => {
     try {
-      const dataDocRef = doc(db, 'tournaments', 'data');
-      await setDoc(dataDocRef, dataRef.current);
+      const res = await fetch('/api/tournament', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataRef.current)
+      });
+      if (!res.ok) throw new Error('Save failed');
       alert("数据保存成功！现在所有人刷新网页都能看到最新的数据，且数据已永久保存。");
     } catch (e) {
       console.error('Failed to save data:', e);
-      try {
-        handleFirestoreError(e, OperationType.WRITE, 'tournaments/data');
-      } catch (err) {
-        alert(`保存失败: ${err instanceof Error ? JSON.parse(err.message).error : String(err)}`);
-      }
+      alert(`保存失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
