@@ -6,13 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Users, Edit2, AlertTriangle } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
 
 export default function TeamsManager() {
   const { data, setData, isEditMode } = useTournament();
   const [newTeamName, setNewTeamName] = useState('');
   const [newClassName, setNewClassName] = useState('');
   const [newPlayers, setNewPlayers] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState<'preseason' | 'novacup' | 'supernova'>('preseason');
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamToDelete, setTeamToDelete] = useState<string | null>(null);
 
@@ -31,6 +31,8 @@ export default function TeamsManager() {
           ...t,
           name: newTeamName.trim(),
           className: newClassName.trim(),
+          group: selectedGroup,
+          isSupernova: selectedGroup === 'supernova',
           players: playersList
         } : t)
       }));
@@ -44,7 +46,8 @@ export default function TeamsManager() {
             id: Math.random().toString(36).substr(2, 9),
             name: newTeamName.trim(),
             className: newClassName.trim(),
-            isSupernova: false,
+            group: selectedGroup,
+            isSupernova: selectedGroup === 'supernova',
             players: playersList
           }
         ]
@@ -54,12 +57,14 @@ export default function TeamsManager() {
     setNewTeamName('');
     setNewClassName('');
     setNewPlayers('');
+    setSelectedGroup('preseason');
   };
 
   const handleEditTeam = (team: any) => {
     setNewTeamName(team.name);
     setNewClassName(team.className);
     setNewPlayers(team.players ? team.players.join(', ') : '');
+    setSelectedGroup(team.group || (team.isSupernova ? 'supernova' : 'preseason'));
     setEditingTeamId(team.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -77,14 +82,30 @@ export default function TeamsManager() {
     setTeamToDelete(null);
   };
 
-  const toggleSupernova = (id: string) => {
+  const changeTeamGroup = (id: string, group: 'preseason' | 'novacup' | 'supernova') => {
     setData(prev => ({
       ...prev,
       teams: prev.teams.map(t => 
-        t.id === id ? { ...t, isSupernova: !t.isSupernova } : t
+        t.id === id ? { ...t, group, isSupernova: group === 'supernova' } : t
       )
     }));
   };
+
+  const GROUP_ORDER = {
+    'preseason': 0,
+    'novacup': 1,
+    'supernova': 2
+  };
+
+  const sortedTeams = [...data.teams].sort((a, b) => {
+    const groupA = a.group || (a.isSupernova ? 'supernova' : 'preseason');
+    const groupB = b.group || (b.isSupernova ? 'supernova' : 'preseason');
+    
+    if (GROUP_ORDER[groupA] !== GROUP_ORDER[groupB]) {
+      return GROUP_ORDER[groupA] - GROUP_ORDER[groupB];
+    }
+    return a.className.localeCompare(b.className, 'zh-CN');
+  });
 
   return (
     <div className="space-y-6">
@@ -126,6 +147,19 @@ export default function TeamsManager() {
                 className="bg-background/50 border-border/50 focus:border-primary"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="teamGroup" className="text-muted-foreground font-bold">所属组别</Label>
+              <select
+                id="teamGroup"
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value as any)}
+                className="flex h-10 w-full rounded-md border border-border/50 bg-background/50 px-3 py-2 text-sm text-white focus:outline-none focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="preseason" className="text-black">积分赛组</option>
+                <option value="novacup" className="text-black">新星杯</option>
+                <option value="supernova" className="text-black">超新星杯</option>
+              </select>
+            </div>
             <div className="flex gap-3">
               <Button onClick={handleSaveTeam} className="flex-1 bg-primary hover:bg-primary/90 text-white shadow-md">
                 {editingTeamId ? <Edit2 className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
@@ -137,6 +171,7 @@ export default function TeamsManager() {
                   setNewTeamName('');
                   setNewClassName('');
                   setNewPlayers('');
+                  setSelectedGroup('preseason');
                 }} className="bg-background/50 border-border/60 hover:bg-background hover:text-white">
                   取消编辑
                 </Button>
@@ -158,7 +193,7 @@ export default function TeamsManager() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.teams.length === 0 ? (
+            {sortedTeams.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={isEditMode ? 5 : 4} className="text-center py-12 text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
@@ -166,7 +201,7 @@ export default function TeamsManager() {
                 </TableCell>
               </TableRow>
             ) : (
-              data.teams.map((team) => (
+              sortedTeams.map((team) => (
                 <TableRow key={team.id} className="border-border/50 hover:bg-muted/30 transition-colors">
                   <TableCell className="font-medium text-foreground/90">{team.className}</TableCell>
                   <TableCell className="font-bold text-white">{team.name}</TableCell>
@@ -185,20 +220,38 @@ export default function TeamsManager() {
                   </TableCell>
                   <TableCell>
                     {isEditMode ? (
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          checked={team.isSupernova} 
-                          onCheckedChange={() => toggleSupernova(team.id)} 
-                          className="data-[state=checked]:bg-[#cda34f]"
-                        />
-                        <span className={`text-sm font-bold ${team.isSupernova ? 'text-[#cda34f]' : 'text-muted-foreground'}`}>
-                          {team.isSupernova ? '超新星' : '新星'}
-                        </span>
-                      </div>
+                      <select
+                        value={team.group || (team.isSupernova ? 'supernova' : 'preseason')}
+                        onChange={(e) => changeTeamGroup(team.id, e.target.value as any)}
+                        className="bg-background/50 border border-border/50 rounded p-1.5 text-xs font-bold text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                      >
+                        <option value="preseason" className="text-black">积分赛组</option>
+                        <option value="novacup" className="text-black">新星杯</option>
+                        <option value="supernova" className="text-black">超新星杯</option>
+                      </select>
                     ) : (
-                      <Badge variant={team.isSupernova ? "default" : "secondary"} className={team.isSupernova ? "bg-[#cda34f] hover:bg-[#cda34f]/90 text-black font-bold" : "bg-muted text-muted-foreground"}>
-                        {team.isSupernova ? '超新星' : '新星'}
-                      </Badge>
+                      (() => {
+                        const curGroup = team.group || (team.isSupernova ? 'supernova' : 'preseason');
+                        if (curGroup === 'supernova') {
+                          return (
+                            <Badge className="bg-[#cda34f] hover:bg-[#cda34f]/90 text-black font-bold border-0">
+                              超新星杯
+                            </Badge>
+                          );
+                        } else if (curGroup === 'novacup') {
+                          return (
+                            <Badge className="bg-primary hover:bg-primary/90 text-white font-bold border-0">
+                              新星杯
+                            </Badge>
+                          );
+                        } else {
+                          return (
+                            <Badge variant="secondary" className="bg-muted text-muted-foreground font-bold border-0">
+                              积分赛组
+                            </Badge>
+                          );
+                        }
+                      })()
                     )}
                   </TableCell>
                   {isEditMode && (

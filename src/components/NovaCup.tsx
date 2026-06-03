@@ -14,7 +14,10 @@ export default function NovaCup() {
 
   const rounds = data.novaCup.swissRounds;
   const bracket = data.novaCup.bracket;
-  const teams = data.teams.filter(t => !t.isSupernova);
+  const teams = data.teams.filter(t => {
+    const g = t.group || (t.isSupernova ? 'supernova' : 'preseason');
+    return g === 'novacup';
+  });
 
   const handleAddSwissRound = () => {
     // Calculate current standings to pair

@@ -12,7 +12,10 @@ export default function PreSeason() {
   const [standingsView, setStandingsView] = useState<'class' | 'team'>('class');
 
   const rounds = data.preSeason.rounds;
-  const teams = data.teams.filter(t => !t.isSupernova);
+  const teams = data.teams.filter(t => {
+    const g = t.group || (t.isSupernova ? 'supernova' : 'preseason');
+    return g === 'preseason';
+  });
 
   const handleAddRound = () => {
     const newRound: Round = {

@@ -3,6 +3,7 @@ export type Team = {
   name: string;
   className: string;
   isSupernova?: boolean;
+  group?: 'preseason' | 'novacup' | 'supernova';
   players: string[];
 };
 
