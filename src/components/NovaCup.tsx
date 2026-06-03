@@ -11,6 +11,7 @@ export default function NovaCup() {
   const { data, setData, isEditMode } = useTournament();
   const [activeRound, setActiveRound] = useState<number>(0);
   const [roundToDelete, setRoundToDelete] = useState<string | null>(null);
+  const [isEditingGroups, setIsEditingGroups] = useState<boolean>(false);
 
   const rounds = data.novaCup.swissRounds;
   const bracket = data.novaCup.bracket;
@@ -378,6 +379,48 @@ export default function NovaCup() {
     return { ...team, wins, losses };
   }).sort((a, b) => b.wins - a.wins);
 
+  const getSubGroupStandings = (subGroupLabel: 'A' | 'B' | 'C' | 'D' | 'unassigned') => {
+    const groupTeams = teams.filter(t => {
+      if (subGroupLabel === 'unassigned') {
+        return !t.novaGroup;
+      }
+      return t.novaGroup === subGroupLabel;
+    });
+
+    return groupTeams.map(team => {
+      let wins = 0;
+      let losses = 0;
+      
+      rounds.forEach(round => {
+        round.matches.forEach(match => {
+          if (match.status === 'completed') {
+            if (match.team1Id === team.id) {
+              if (match.score1 > match.score2) wins++;
+              else if (match.score1 < match.score2) losses++;
+            } else if (match.team2Id === team.id) {
+              if (match.score2 > match.score1) wins++;
+              else if (match.score2 < match.score1) losses++;
+            }
+          }
+        });
+      });
+
+      return { ...team, wins, losses };
+    }).sort((a, b) => {
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      return a.losses - b.losses;
+    });
+  };
+
+  const handleUpdateNovaGroup = (teamId: string, novaGroup: 'A' | 'B' | 'C' | 'D' | '') => {
+    setData(prev => ({
+      ...prev,
+      teams: prev.teams.map(t => 
+        t.id === teamId ? { ...t, novaGroup: novaGroup || undefined } : t
+      )
+    }));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -539,37 +582,129 @@ export default function NovaCup() {
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-[#cda34f]" />
-                <h3 className="font-bold text-lg text-white drop-shadow-md">瑞士轮积分榜</h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-[#cda34f]" />
+                  <h3 className="font-bold text-lg text-white drop-shadow-md">新星组积分榜</h3>
+                </div>
+                
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => setIsEditingGroups(!isEditingGroups)}
+                  className={`h-7 px-2.5 text-xs border-border/50 ${isEditingGroups ? 'bg-primary text-white hover:bg-primary/90' : 'bg-background/40 hover:text-white'}`}
+                >
+                  {isEditingGroups ? '完成分组' : '编辑分组'}
+                </Button>
               </div>
-              <div className="border border-border/60 rounded-md bg-card/50 backdrop-blur-sm shadow-xl overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow className="hover:bg-transparent border-border/50">
-                      <TableHead className="w-12 text-center font-bold text-muted-foreground">排名</TableHead>
-                      <TableHead className="font-bold text-muted-foreground">队伍</TableHead>
-                      <TableHead className="text-center font-bold text-muted-foreground">战绩</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {standings.map((team, idx) => (
-                      <TableRow key={team.id} className={`border-border/50 hover:bg-muted/30 transition-colors ${idx < 16 ? 'bg-primary/5' : ''}`}>
-                        <TableCell className="text-center font-bold text-muted-foreground">{idx + 1}</TableCell>
-                        <TableCell>
-                          <div className="font-bold text-white">{team.name}</div>
-                        </TableCell>
-                        <TableCell className="text-center font-mono font-bold">{team.wins}-{team.losses}</TableCell>
-                      </TableRow>
+
+              {/* Group editor when active */}
+              {isEditingGroups && (
+                <div className="border border-primary/30 rounded-xl bg-primary/5 p-4 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-primary">为各队伍分配组别 (A、B、C、D)：</span>
+                  </div>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                    {teams.map(team => (
+                      <div key={team.id} className="flex justify-between items-center p-2 bg-background/60 border border-border/40 rounded-lg text-xs hover:border-primary/30 transition-colors">
+                        <span className="font-bold text-white max-w-[120px] truncate">{team.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground mr-1">{team.className}</span>
+                          <select
+                            value={team.novaGroup || ''}
+                            onChange={(e) => handleUpdateNovaGroup(team.id, e.target.value as any)}
+                            className="bg-background border border-border/60 rounded px-1 py-0.5 text-xs text-white focus:border-primary focus:outline-none"
+                          >
+                            <option value="">未指定组</option>
+                            <option value="A">A 组</option>
+                            <option value="B">B 组</option>
+                            <option value="C">C 组</option>
+                            <option value="D">D 组</option>
+                          </select>
+                        </div>
+                      </div>
                     ))}
-                    {standings.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">暂无数据</TableCell>
-                      </TableRow>
+                    {teams.length === 0 && (
+                      <div className="text-center py-4 text-muted-foreground text-xs">没有新星杯队伍</div>
                     )}
-                  </TableBody>
-                </Table>
-              </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Unassigned Teams Notice */}
+              {!isEditingGroups && getSubGroupStandings('unassigned').length > 0 && (
+                <div className="border border-yellow-500/20 rounded-xl bg-yellow-500/5 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-yellow-500">
+                      <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                      <span className="text-xs font-bold">有 {getSubGroupStandings('unassigned').length} 支队伍未分配小组</span>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="link" 
+                      onClick={() => setIsEditingGroups(true)}
+                      className="text-yellow-500 hover:text-yellow-400 p-0 h-auto text-xs font-bold"
+                    >
+                      去分配
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabs for ABCD Standing views */}
+              <Tabs defaultValue="A" className="w-full">
+                <TabsList className="grid w-full grid-cols-4 bg-muted/40 border border-border/40 p-1 mb-3">
+                  <TabsTrigger value="A" className="text-xs font-bold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">A 组</TabsTrigger>
+                  <TabsTrigger value="B" className="text-xs font-bold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">B 组</TabsTrigger>
+                  <TabsTrigger value="C" className="text-xs font-bold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">C 组</TabsTrigger>
+                  <TabsTrigger value="D" className="text-xs font-bold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">D 组</TabsTrigger>
+                </TabsList>
+
+                {['A', 'B', 'C', 'D'].map((g) => {
+                  const grpStandings = getSubGroupStandings(g as any);
+                  return (
+                    <TabsContent key={g} value={g} className="mt-0 outline-none">
+                      <div className="border border-border/60 rounded-xl bg-card/50 backdrop-blur-sm shadow-xl overflow-hidden">
+                        <div className="bg-muted/30 px-3.5 py-2 border-b border-border/40 flex justify-between items-center">
+                          <span className="text-xs font-bold text-white">{g} 组积分榜 ({grpStandings.length}台)</span>
+                        </div>
+                        <Table>
+                          <TableHeader className="bg-muted/10">
+                            <TableRow className="hover:bg-transparent border-border/40">
+                              <TableHead className="w-12 text-center font-bold text-xs text-muted-foreground font-sans">排名</TableHead>
+                              <TableHead className="font-bold text-xs text-muted-foreground font-sans">队伍</TableHead>
+                              <TableHead className="text-center font-bold text-xs text-muted-foreground font-sans">战绩</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {grpStandings.map((team, idx) => (
+                              <TableRow key={team.id} className={`border-border/40 hover:bg-muted/20 transition-colors ${idx < 4 ? 'bg-primary/5' : ''}`}>
+                                <TableCell className="text-center font-bold text-muted-foreground text-xs">
+                                  {idx === 0 ? '👑' : idx + 1}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="font-bold text-white text-sm">{team.name}</div>
+                                  <div className="text-[10px] text-muted-foreground">{team.className}</div>
+                                </TableCell>
+                                <TableCell className="text-center font-mono font-bold text-xs text-white">
+                                  {team.wins} - {team.losses}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {grpStandings.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={3} className="text-center py-10 text-xs text-muted-foreground">
+                                  该组暂无队伍分配
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
             </div>
           </div>
         </TabsContent>

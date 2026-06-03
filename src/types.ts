@@ -4,6 +4,7 @@ export type Team = {
   className: string;
   isSupernova?: boolean;
   group?: 'preseason' | 'novacup' | 'supernova';
+  novaGroup?: 'A' | 'B' | 'C' | 'D';
   players: string[];
 };
 
