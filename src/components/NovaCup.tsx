@@ -37,7 +37,7 @@ export default function NovaCup() {
 
     const newRound: Round = {
       id: Math.random().toString(36).substr(2, 9),
-      name: `瑞士轮 第 ${rounds.length + 1} 轮`,
+      name: `小组赛 第 ${rounds.length + 1} 轮`,
       matches: []
     };
     
@@ -431,7 +431,7 @@ export default function NovaCup() {
         <TabsList className="grid w-full max-w-md grid-cols-2 bg-card/50 border border-border/50 p-1 mb-6">
           <TabsTrigger value="swiss" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Swords className="w-4 h-4 mr-2" />
-            瑞士轮 (24进16)
+            小组赛 (24进16)
           </TabsTrigger>
           <TabsTrigger value="bracket" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <GitMerge className="w-4 h-4 mr-2" />
@@ -441,7 +441,7 @@ export default function NovaCup() {
         
         <TabsContent value="swiss" className="mt-0 outline-none space-y-8">
           <div className="flex justify-between items-center">
-            <h3 className="text-xl font-bold text-white">瑞士轮阶段</h3>
+            <h3 className="text-xl font-bold text-white">小组赛阶段</h3>
             {isEditMode && (
               <Button onClick={handleAddSwissRound} className="bg-primary hover:bg-primary/90 text-white shadow-md">
                 <Plus className="w-4 h-4 mr-2" />
